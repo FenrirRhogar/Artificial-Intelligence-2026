@@ -1,5 +1,4 @@
-requirements.txt
+.venv
+.idea
+__pycache__
 ai_assignment1_2026/requirements.txt
-ai_assignment1_2026/.venv
-ai_assignment1_2026/.idea
-ai_assignment1_2026/__pycache__
