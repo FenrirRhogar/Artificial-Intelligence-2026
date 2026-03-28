@@ -1,4 +1,3 @@
-
 from Algorithms.Utils.SequentialSearch import SequentialSearch
 from SMP.motion_planner.plot_config import DefaultPlotConfig
 
