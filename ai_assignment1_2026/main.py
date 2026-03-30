@@ -35,10 +35,10 @@ def main():
 
     # comment out the planners which you don't want to execute
     dict_motion_planners = {
-        0: (MotionPlanner.DepthFirstSearch, "Depth First Search"),
+       # 0: (MotionPlanner.DepthFirstSearch, "Depth First Search"),
         1: (MotionPlanner.IDDFS, "Iterative Deepening DFS"),
-        2: (MotionPlanner.weighted_astar, "Weighted A* Search"),
-        3: (MotionPlanner.LRTAstar, "LRTA* Search")
+       # 2: (MotionPlanner.weighted_astar, "Weighted A* Search"),
+       # 3: (MotionPlanner.LRTAstar, "LRTA* Search")
     
     }
 
