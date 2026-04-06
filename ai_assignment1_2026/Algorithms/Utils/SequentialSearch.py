@@ -181,12 +181,14 @@ class SequentialSearch(SearchBaseClass, ABC):
         return cost
 
     def heuristic_function(self, node_current):
-        """
-        Enter your heuristic function h(x) calculation of distance from node_current to goal
-        Returns the distance normalized to be comparable with cost function measurements
-        """
-        distance = 0
-        return distance
+        node_center = self.get_node_information(node_current)   # [x, y]
+        goal_center = self.get_goal_information()               # [x, y, length, width]
+
+        distance_x = goal_center[0] - node_center[0]
+        distance_y = goal_center[1] - node_center[1]
+
+        euclidean_distance = math.sqrt(distance_x**2 + distance_y**2)
+        return euclidean_distance
 
     def evaluation_function(self, node_current):
         """
