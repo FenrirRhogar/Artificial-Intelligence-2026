@@ -58,15 +58,16 @@ class weighted_astar(SequentialSearch):
             # Check all possible successors from the current maneuver automaton
             for primitive_successor in node_current.get_successors():
                 
-                # Check if goal is reached via this primitive
-                # We do this BEFORE take_step to match the provided goal_reached structure
-                # which handles visualization and pruning if goal is hit.
+
+                # Execute step and check for collisions
+                collision_flag, child = self.take_step(successor=primitive_successor, node_current=node_current, cost=True)
+                
+                if collision_flag:
+                    continue
                 if self.goal_reached(successor=primitive_successor, node_current=node_current):
                     # Reconstruct path and info for final output
                     # Note: goal_reached internally handles the solution plotting
                     
-                    # We need the child node to get the final cost and path
-                    _, child = self.take_step(successor=primitive_successor, node_current=node_current, cost=True)
                     
                     print(f"Weighted A* (w={self.w}):")
                     print(f"    Visited Nodes number: {visited_nodes_count}")
@@ -77,12 +78,6 @@ class weighted_astar(SequentialSearch):
                     print(f"    Estimated Cost: {child.cost:.4f}")
                     
                     return True
-
-                # Execute step and check for collisions
-                collision_flag, child = self.take_step(successor=primitive_successor, node_current=node_current, cost=True)
-                
-                if collision_flag:
-                    continue
 
                 # Calculate f(n) = g(n) + w * h(n)
                 # g(n) is child.cost (accumulated cost from start)

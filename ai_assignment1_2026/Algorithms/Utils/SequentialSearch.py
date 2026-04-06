@@ -182,11 +182,21 @@ class SequentialSearch(SearchBaseClass, ABC):
 
     def heuristic_function(self, node_current):
         """
-        Enter your heuristic function h(x) calculation of distance from node_current to goal
-        Returns the distance normalized to be comparable with cost function measurements
+        Heuristic function h(x) calculation of distance from node_current to goal.
         """
-        distance = 0
-        return distance
+        if self.heuristic_type == "euclidean":
+            # Uses the provided method in SearchBaseClass which handles goal regions
+            return self.calc_euclidean_distance(node_current)
+        
+        elif self.heuristic_type == "manhattan":
+            # Custom Manhattan distance to the center of the goal
+            pos_current = node_current.list_paths[-1][-1].position
+            goal_info = self.get_goal_information() # [x, y, length, width]
+            pos_goal = [goal_info[0], goal_info[1]]
+            
+            # |x1 - x2| + |y1 - y2|
+            distance = abs(pos_current[0] - pos_goal[0]) + abs(pos_current[1] - pos_goal[1])
+            return distance
 
     def evaluation_function(self, node_current):
         """
