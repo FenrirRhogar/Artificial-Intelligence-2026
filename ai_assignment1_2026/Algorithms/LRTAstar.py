@@ -63,7 +63,7 @@ class LRTAstar(SequentialSearch):
                         print(f"  Step {i}: pos=({s.position[0]:.2f}, {s.position[1]:.2f}), v={s.velocity:.2f}")
                     return True
 
-                step_cost = 1
+                step_cost = node_current.cost - child.cost
                 f_child = step_cost + self._get_H(child)
                 successors_info.append((child, primitive_successor, f_child))
 
