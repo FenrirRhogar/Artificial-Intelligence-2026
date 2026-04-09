@@ -10,16 +10,11 @@ class weighted_astar(SequentialSearch):
     def __init__(self, scenario, planningProblem, automaton, plot_config=DefaultPlotConfig):
         super().__init__(scenario=scenario, planningProblem=planningProblem, automaton=automaton,
                          plot_config=plot_config)
-        # Default weight and heuristic type
-        # These can be modified for experimentation
-        self.w = 1.0 
-        self.heuristic_type = "euclidean" # options: "euclidean", "manhattan"
+        self.w = 1.0
+        self.heuristic_type = "weighted_euclidean" # options: "euclidean", "manhattan", "weighted_euclidean"
 
     def execute_search(self, time_pause):
-        """
-        Implementation of Weighted A* Search.
-        f(n) = g(n) + w * h(n)
-        """
+
         # Initialize search and get the initial node
         node_initial = self.initialize_search(time_pause=time_pause, cost=True)
         
@@ -30,9 +25,7 @@ class weighted_astar(SequentialSearch):
         f_initial = node_initial.cost + self.w * self.heuristic_function(node_initial)
         frontier.insert(node_initial, f_initial)
         
-        # Closed set to keep track of visited states and their minimum cost g(n)
-        # Using a dictionary: state_representation -> min_g_cost
-        # For simplicity in this motion planning context, we use the final position of the node
+       
         visited = {} 
         
         # Counter for expanded nodes
@@ -102,9 +95,9 @@ class weighted_astar(SequentialSearch):
             pos_current = node_current.list_paths[-1][-1].position
             goal_info = self.get_goal_information() # [x, y, length, width]
             pos_goal = [goal_info[0], goal_info[1]]
-            
+
             # |x1 - x2| + |y1 - y2|
             distance = abs(pos_current[0] - pos_goal[0]) + abs(pos_current[1] - pos_goal[1])
             return distance
-            
+        
         return 0

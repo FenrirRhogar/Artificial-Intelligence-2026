@@ -8,6 +8,7 @@ try:
     mpl.use('Qt5Agg')
 except ImportError:
     mpl.use('TkAgg')
+# Backend will be overridden below if SHOW_VISUAL=False
 
 from commonroad.common.file_reader import CommonRoadFileReader
 from commonroad.visualization.mp_renderer import MPRenderer
@@ -19,38 +20,76 @@ from SMP.motion_planner.motion_planner import MotionPlanner
 from SMP.motion_planner.plot_config import StudentScriptPlotConfig
 
 
+# ── Configuration ─────────────────────────────────────────────────────────────
+
+# Heuristics to simulate for Weighted A* and LRTA*
+HEURISTICS = ["euclidean", "manhattan"]
+
+# Set to True to show animated plots, False to run without any visualization
+SHOW_VISUAL = False
+
+# ──────────────────────────────────────────────────────────────────────────────
+
+
+def save_figure(folder: str, name: str) -> None:
+    """Save the current matplotlib figure to folder/name.svg."""
+    os.makedirs(folder, exist_ok=True)
+    path = os.path.join(folder, name + '.svg')
+    plt.rcParams['svg.fonttype'] = 'none'
+    try:
+        plt.savefig(path, format='svg', bbox_inches='tight')
+    except Exception as e:
+        print(f'Saving {path} failed: {e}')
+    plt.close('all')
+
+
 def main():
-    # configurations
-    path_scenario = 'Scenarios/scenario1.xml'
+    scenarios = [
+        'Scenarios/scenario1.xml',
+        'Scenarios/scenario2.xml',
+        'Scenarios/scenario3.xml',
+    ]
     file_motion_primitives = 'V_9.0_9.0_Vstep_0_SA_-0.2_0.2_SAstep_0.4_T_0.5_Model_BMW320i.xml'
+    if not SHOW_VISUAL:
+        plt.switch_backend('Agg')  # renders to memory, no display window
     config_plot = StudentScriptPlotConfig(DO_PLOT=True)
-
-    # load scenario and planning problem set
-    scenario, planning_problem_set = CommonRoadFileReader(path_scenario).open()
-    # retrieve the first planning problem
-    planning_problem = list(planning_problem_set.planning_problem_dict.values())[0]
-
-    # create maneuver automaton and planning problem
     automaton = ManeuverAutomaton.generate_automaton(file_motion_primitives)
 
-    # comment out the planners which you don't want to execute
-    dict_motion_planners = {
-       # 0: (MotionPlanner.DepthFirstSearch, "Depth First Search"),
-       # 1: (MotionPlanner.IDDFS, "Iterative Deepening DFS"),
-       # 2: (MotionPlanner.weighted_astar, "Weighted A* Search"),
-        3: (MotionPlanner.LRTAstar, "LRTA* Search")
-    
-    }
+    for i, path_scenario in enumerate(scenarios, start=1):
+        # load scenario and planning problem
+        scenario, planning_problem_set = CommonRoadFileReader(path_scenario).open()
+        planning_problem = list(planning_problem_set.planning_problem_dict.values())[0]
 
-    for (class_planner, name_planner) in dict_motion_planners.values():
-        planner = class_planner(scenario=scenario, planning_problem=planning_problem,
-                                automaton=automaton, plot_config=config_plot)
+        figures_folder = f'Figures/Scenario {i}'
 
-        # start search
-        print(name_planner + " started..")
-        found_path = planner.execute_search(time_pause=0.01)
+        # ── Iterative-Deepening DFS (no heuristic, run once per scenario) ─────
+        print(f"\nScenario {i} | IDDFS")
+        planner = MotionPlanner.IDDFS(scenario=scenario, planning_problem=planning_problem,
+                                      automaton=automaton, plot_config=config_plot)
+        planner.execute_search(time_pause=0.0001)
+        save_figure(figures_folder, 'IDDFS')
 
-print('Done')
+        for heuristic in HEURISTICS:
+            print(f"\nScenario {i} | Heuristic: {heuristic}")
+
+            # ── Weighted A* ───────────────────────────────────────────────────
+            for w in [0, 1, 1.25, 1.5, 1.75, 2, 5, 10]:
+                planner = MotionPlanner.weighted_astar(scenario=scenario, planning_problem=planning_problem,
+                                                       automaton=automaton, plot_config=config_plot)
+                planner.w = w
+                planner.heuristic_type = heuristic
+                planner.execute_search(time_pause=0.0001)
+                save_figure(figures_folder, f'WeightedAstar_w{w}_{heuristic}')
+
+            # ── LRTA* ─────────────────────────────────────────────────────────
+            planner = MotionPlanner.LRTAstar(scenario=scenario, planning_problem=planning_problem,
+                                             automaton=automaton, plot_config=config_plot)
+            planner.heuristic_type = heuristic
+            planner.execute_search(time_pause=0.0001)
+            save_figure(figures_folder, f'LRTAstar_{heuristic}')
+
+    print('\nDone')
+
 
 if __name__ == '__main__':
     main()

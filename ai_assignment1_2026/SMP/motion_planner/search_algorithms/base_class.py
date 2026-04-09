@@ -67,7 +67,7 @@ class SearchBaseClass(ABC):
         # visualization parameters
         self.config_plot = plot_config
         self.path_fig = None
-        self.goal_path_fig = "Figures/"
+        self.goal_path_fig = None
 
         # remove unnecessary attributes of the initial state
         if hasattr(self.state_initial, 'yaw_rate'):

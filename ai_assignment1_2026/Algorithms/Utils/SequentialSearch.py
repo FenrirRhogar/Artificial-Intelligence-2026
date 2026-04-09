@@ -193,7 +193,7 @@ class SequentialSearch(SearchBaseClass, ABC):
             pos_current = node_current.list_paths[-1][-1].position
             goal_info = self.get_goal_information() # [x, y, length, width]
             pos_goal = [goal_info[0], goal_info[1]]
-            
+
             # |x1 - x2| + |y1 - y2|
             distance = abs(pos_current[0] - pos_goal[0]) + abs(pos_current[1] - pos_goal[1])
             return distance

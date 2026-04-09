@@ -16,7 +16,7 @@ class LRTAstar(SequentialSearch):
     def __init__(self, scenario, planningProblem, automaton, plot_config=DefaultPlotConfig):
         super().__init__(scenario=scenario, planningProblem=planningProblem, automaton=automaton,
                          plot_config=plot_config)
-        self.heuristic_type = "euclidean"  # options: "euclidean", "manhattan"
+        self.heuristic_type = "weighted_euclidean"  # options: "euclidean", "manhattan", "weighted_euclidean"
         self.H = {}
        # self.visited = {}  # state_key -> min cost seen
 
@@ -57,19 +57,19 @@ class LRTAstar(SequentialSearch):
 
                 if self.goal_reached(successor=primitive_successor, node_current=node_current):
                     path_taken.append(child.list_paths[-1][-1])
-                    print(f"LRTA*: Visited Nodes: {visited_nodes_count}")
-                    print(f"LRTA*: Path length: {len(path_taken)} steps")
-                    for i, s in enumerate(path_taken):
-                        print(f"  Step {i}: pos=({s.position[0]:.2f}, {s.position[1]:.2f}), v={s.velocity:.2f}")
+                    path_str = "->".join([f"({s.position[0]:.2f},{s.position[1]:.2f})" for s in path_taken])
+                    print(f"LRTA* Search:")
+                    print(f"    Visited Nodes number: {visited_nodes_count}")
+                    print(f"    Path: {path_str}")
+                    print(f"    Estimated Cost: {child.cost:.4f}")
                     return True
 
-                step_cost = node_current.cost - child.cost
+                step_cost = child.cost - node_current.cost 
                 f_child = step_cost + self._get_H(child)
                 successors_info.append((child, primitive_successor, f_child))
 
             if not successors_info:
                 self.H[current_key] = self._get_H(node_current) + 50
-                print(f"Dead end at step {visited_nodes_count}, H table size: {len(self.H)}, pos: {current_key}")
                 node_current = CostNode(
                     list_paths=[[initial_state]],
                     list_primitives=[initial_primitive],
@@ -107,5 +107,5 @@ class LRTAstar(SequentialSearch):
             pos_goal = [goal_info[0], goal_info[1]]
             distance = abs(pos_current[0] - pos_goal[0]) + abs(pos_current[1] - pos_goal[1])
             return distance
-
+        
         return 0
