@@ -6,7 +6,6 @@ from pathlib import Path
 sys.path.append(str(Path(__file__).resolve().parents[1]))
 
 from agents.local_search_agents import SimulatedAnnealingAgent, HillClimbingAgent, TetsingAgent
-from wrappers.wrappers import ModifyTerminalStateRewardCartPole, ModifyTerminalStateRewardMountainCar
 import ns_gym
 from ns_gym.wrappers import NSClassicControlWrapper
 from ns_gym.schedulers import ContinuousScheduler, PeriodicScheduler
