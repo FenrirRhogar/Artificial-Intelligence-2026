@@ -2,8 +2,13 @@ import gymnasium as gym
 import numpy as np
 import sys
 import matplotlib.pyplot as plt
+import os
 from pathlib import Path
 sys.path.append(str(Path(__file__).resolve().parents[1]))
+
+# Create results directory if it doesn't exist
+RESULTS_DIR = "results"
+os.makedirs(RESULTS_DIR, exist_ok=True)
 
 from agents.local_search_agents import SimulatedAnnealingAgent, HillClimbingAgent, TetsingAgent
 import ns_gym
@@ -97,9 +102,9 @@ def experiment_1(domain):
     ax.grid(axis="y", alpha=0.3)
     plt.tight_layout()
     fname = f"exp1_{domain.replace('-','_')}.png"
-    plt.savefig(fname, dpi=150)
+    plt.savefig(os.path.join(RESULTS_DIR, fname), dpi=150)
     plt.close()
-    print(f"  Saved: {fname}")
+    print(f"  Saved: {os.path.join(RESULTS_DIR, fname)}")
     return mean_rewards
 
 
@@ -138,9 +143,9 @@ def experiment_2(domain):
     ax.grid(alpha=0.3)
     plt.tight_layout()
     fname = f"exp2_{domain.replace('-','_')}.png"
-    plt.savefig(fname, dpi=150)
+    plt.savefig(os.path.join(RESULTS_DIR, fname), dpi=150)
     plt.close()
-    print(f"  Saved: {fname}")
+    print(f"  Saved: {os.path.join(RESULTS_DIR, fname)}")
     return results
 
 
