@@ -29,61 +29,70 @@
 \maketitle
 
 \section{Εισαγωγή}
-Η παρούσα αναφορά περιγράφει την υλοποίηση πρακτόρων τοπικής αναζήτησης σε μη-στατικά περιβάλλοντα χρησιμοποιώντας τη βιβλιοθήκη \texttt{ns-gym}. Εστιάζουμε στη βελτιστοποίηση της απόδοσης στο περιβάλλον CartPole-v1 μέσω του αλγορίθμου Simulated Annealing και της χρήσης προσαρμοσμένων wrappers.
+Η παρούσα αναφορά περιγράφει την υλοποίηση και σύγκριση τριών πρακτόρων τοπικής αναζήτησης σε μη-στατικά περιβάλλοντα: \textbf{Hill Climbing}, \textbf{Random Restart Hill Climbing} και \textbf{Simulated Annealing}. Η αξιολόγηση έγινε στα περιβάλλοντα \texttt{CartPole-v1} και \texttt{MountainCar-v0} της βιβλιοθήκης \texttt{ns-gym}, τα οποία χαρακτηρίζονται από μεταβαλλόμενες φυσικές παραμέτρους.
 
 \section{Υλοποίηση Wrappers (\texttt{wrappers/wrappers.py})}
-Οι wrappers είναι απαραίτητοι για τον ανακαθορισμό της ανταμοιβής και τη διευκόλυνση του σχεδιασμού (planning).
+Οι wrappers υλοποιήθηκαν για να τροποποιήσουν την ανταμοιβή και να επιτρέψουν τον σχεδιασμό (planning) μέσω προσομοίωσης.
 
-\subsection{ForwardWrapper}
-Υλοποιήθηκε η κλάση \texttt{ForwardWrapper} για την εξασφάλιση της πρόσβασης στις δυναμικές παραμέτρους του \texttt{ns-gym}. Χρησιμοποιεί την \texttt{\_\_getattr\_\_} για την προώθηση κλήσεων στο εσωτερικό περιβάλλον, επιτρέποντας στον πράκτορα να διαβάζει μεταβλητές όπως η βαρύτητα και η μάζα.
+\subsection{ForwardWrapper και Δυναμικές Παράμετροι}
+Η κλάση \texttt{ForwardWrapper} επιτρέπει στους πράκτορες να έχουν πρόσβαση στις μεταβαλλόμενες παραμέτρους του \texttt{ns-gym} (όπως η βαρύτητα και η μάζα). Η μέθοδος \texttt{\_\_getattr\_\_} εξασφαλίζει ότι οι κλήσεις προωθούνται στο εσωτερικό περιβάλλον χωρίς να χάνεται η πληροφορία της μη-στατικότητας.
 
-\subsection{Reward Shaping καιPlanning}
-Στα περιβάλλοντα CartPole και MountainCar, η μέθοδος \texttt{step()} τροποποιήθηκε ώστε να προσθέτει τυχαίο θόρυβο:
-\begin{equation}
-    r_{noisy} = r_{orig} + 0.5 \cdot 2 \cdot (\text{rand}() - 0.5)
-\end{equation}
+\subsection{Reward Shaping}
+Στη μέθοδο \texttt{step()}, προστίθεται τυχαίος θόρυβος $r_{noisy} = r_{orig} + \epsilon$, καθιστώντας την εκμάθηση πιο απαιτητική. Επιπλέον, η μέθοδος \texttt{reward(action)} παρέχει μια γρήγορη εκτίμηση της επόμενης κατάστασης για lookahead planning.
 
-Επιπλέον, η μέθοδος \texttt{reward(action)} επιτρέπει τον υπολογισμό της ανταμοιβής χωρίς την εκτέλεση πραγματικού βήματος, χρησιμοποιώντας τις φυσικές εξισώσεις του περιβάλλοντος.
+\section{Πράκτορες Τοπικής Αναζήτησης}
 
-\section{Αλγόριθμος Simulated Annealing (SA)}
-Ο πράκτορας \texttt{SimulatedAnnealingAgent} χρησιμοποιεί μια στοχαστική προσέγγιση για την αποφυγή τοπικών μεγίστων.
+\subsection{Hill Climbing (HC)}
+Ο πράκτορας \texttt{HillClimbingAgent} ακολουθεί μια άπληστη (greedy) στρατηγική. Σε κάθε βήμα, αξιολογεί όλες τις δυνατές κινήσεις χρησιμοποιώντας lookahead και επιλέγει αυτή που μεγιστοποιεί την άμεση αναμενόμενη αξία (value). Αν και αποτελεσματικός, ο αλγόριθμος είναι ευάλωτος σε τοπικά μέγιστα.
 
-\subsection{Μηχανισμός Λήψης Απόφασης}
-Σε κάθε βήμα, ο πράκτορας αξιολογεί τις διαθέσιμες ενέργειες. Το κριτήριο αποδοχής μιας χειρότερης κίνησης βασίζεται στην πιθανότητα:
-\begin{equation}
-    P = e^{\frac{\Delta V}{T}}
-\end{equation}
-όπου $\Delta V$ είναι η διαφορά στην αξία μεταξύ της τυχαίας γειτονικής κίνησης και της τρέχουσας βέλτιστης, και $T$ είναι η τρέχουσα θερμοκρασία.
+\subsection{Random Restart Hill Climbing (RRHC)}
+Για την αντιμετώπιση των τοπικών μεγίστων, ο \texttt{RandomRestartHillClimbingAgent} εκτελεί πολλαπλές αναζητήσεις Hill Climbing ξεκινώντας από διαφορετικά τυχαία σημεία (ή τυχαίες αρχικές κινήσεις). Στο πλαίσιο της εργασίας, αυτό υλοποιείται μέσω επαναλαμβανόμενων rollouts ή αυξημένης δειγματοληψίας υποψήφιων διαδρομών.
 
-\subsection{Ευρετική Συνάρτηση (Heuristic)}
-Για το CartPole, η απόδοση βελτιώθηκε σημαντικά με την υλοποίηση μιας ευρετικής που λαμβάνει υπόψη τη γωνία $\theta$, τη θέση $x$ και τη γωνιακή ταχύτητα $\dot{\theta}$:
-\begin{equation}
-    V = 10.0 - (10.0 \cdot \theta^2 + 0.1 \cdot x^2 + 0.5 \cdot \dot{\theta}^2)
-\end{equation}
+\subsection{Simulated Annealing (SA)}
+Ο πράκτορας \texttt{SimulatedAnnealingAgent} επιτρέπει την αποδοχή χειρότερων κινήσεων με πιθανότητα $P = e^{\Delta V / T}$. Αυτό βοηθά στην "απόδραση" από τοπικά μέγιστα, ειδικά στην αρχή του επεισοδίου όπου η θερμοκρασία $T$ είναι υψηλή.
 
-\subsection{Cooling Schedule}
-Η θερμοκρασία μειώνεται εκθετικά:
-\begin{equation}
-    T_{n+1} = \max(T_n \cdot \alpha, T_{min})
-\end{equation}
-με $\alpha = 0.99$ και $T_{min} = 0.001$.
+\section{Ευρετικές Συναρτήσεις (Heuristics)}
+Η επιτυχία των αλγορίθμων βασίζεται σε ισχυρές ευρετικές συναρτήσεις:
+\begin{itemize}
+    \item \textbf{CartPole:} $V = 10.0 - (10.0 \cdot \theta^2 + 0.1 \cdot x^2 + 0.5 \cdot \dot{\theta}^2)$, δίνοντας έμφαση στη σταθερότητα της γωνίας και της ταχύτητας.
+    \item \textbf{MountainCar:} $V = \text{pos} + 15.0 \cdot \text{vel}^2$, ενθαρρύνοντας την αύξηση της κινητικής ενέργειας για την ανάβαση.
+\end{itemize}
 
 \section{Πειραματικά Αποτελέσματα}
-Τα πειράματα έδειξαν ότι ο SA πράκτορας υπερέχει σημαντικά του τυχαίου πράκτορα, ειδικά σε μεγάλα χρονικά διαστήματα (timesteps), παρά τη μη-στατικότητα του περιβάλλοντος.
+Τα αποτελέσματα των πειραμάτων αποτυπώνονται στις παρακάτω γραφικές παραστάσεις.
+
+\subsection{Πείραμα 1: Μέση Ανταμοιβή ανά Timesteps}
+Συγκρίνουμε τους πράκτορες για $max\_timesteps \in \{10, 100, 500, 1000\}$.
 
 \begin{figure}[h]
     \centering
-    %\includegraphics[width=0.8\textwidth]{exp1_CartPole_v1.png}
-    \caption{Σύγκριση μέσης ανταμοιβής μεταξύ Random και Simulated Annealing.}
+    \includegraphics[width=0.85\textwidth]{exp1_CartPole_v1.png}
+    \caption{Μέση ανταμοιβή (100 επεισόδια) για το CartPole-v1. Συγκρίνονται οι Random, HC, RRHC και SA.}
 \end{figure}
 
 \begin{figure}[h]
     \centering
-    %\includegraphics[width=0.8\textwidth]{sa_temperature_plot.png}
-    \caption{Μείωση της θερμοκρασίας του SA κατά τη διάρκεια του επεισοδίου.}
+    \includegraphics[width=0.85\textwidth]{exp1_MountainCar_v0.png}
+    \caption{Μέση ανταμοιβή (100 επεισόδια) για το MountainCar-v0.}
+\end{figure}
+
+\subsection{Πείραμα 2: Καμπύλη Μάθησης (Non-Stationary)}
+Παρατηρούμε την απόδοση σε 1000 επεισόδια ($max\_timesteps=100$).
+
+\begin{figure}[h]
+    \centering
+    \includegraphics[width=0.85\textwidth]{exp2_CartPole_v1.png}
+    \caption{Εξέλιξη συσσωρευμένης ανταμοιβής στο CartPole-v1 καθώς οι παράμετροι μεταβάλλονται.}
+\end{figure}
+
+\subsection{Θερμοκρασία Simulated Annealing}
+\begin{figure}[h]
+    \centering
+    \includegraphics[width=0.7\textwidth]{sa_temperature_plot.png}
+    \caption{Cooling schedule του Simulated Annealing πράκτορα.}
 \end{figure}
 
 \section{Συμπεράσματα}
-Η χρήση ισχυρών ευρετικών συναρτήσεων και ο σωστός συγχρονισμός των παραμέτρων στο \texttt{ns-gym} είναι καθοριστικά για την επιτυχία της τοπικής αναζήτησης. Ο Simulated Annealing αποδείχθηκε ικανός να διατηρεί το εκκρεμές όρθιο για πολύ περισσότερο χρόνο από τον τυχαίο πράκτορα, ακόμα και υπό συνθήκες μεταβαλλόμενης φυσικής.
+Η ανάλυση των αποτελεσμάτων δείχνει ότι... [Συμπληρώστε με βάση τα δικά σας ευρήματα, π.χ. ο SA υπερέχει στο CartPole λόγω ευελιξίας, ενώ ο HC είναι ταχύτερος].
 
 \end{document}
