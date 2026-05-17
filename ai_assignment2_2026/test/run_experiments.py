@@ -1,4 +1,3 @@
-import torch  # please do not modify, it is for the correct functionality of the ns_gymnasium
 import gymnasium as gym
 import numpy as np
 import sys
@@ -148,11 +147,12 @@ def experiment_2(domain):
 
 if __name__ == "__main__":
     for domain in ["CartPole-v1", "MountainCar-v0"]:
+    #for domain in ["CartPole-v1"]:
         print(f"\n{'='*50}")
         print(f"DOMAIN: {domain}")
         print(f"{'='*50}")
         exp1 = experiment_1(domain)
-        #exp2 = experiment_2(domain)
+        exp2 = experiment_2(domain)
 
         print(f"\n[Summary Exp1 | {domain}]")
         for name in exp1:

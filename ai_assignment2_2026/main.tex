@@ -1,0 +1,89 @@
+\documentclass[11pt,a4paper]{article}
+
+% LuaLaTeX Greek support
+\usepackage{fontspec}
+\usepackage{polyglossia}
+\setmainlanguage{greek}
+\setotherlanguage{english}
+
+% Fonts - Using standard system fonts that usually support Greek
+\newfontfamily\greekfont[Script=Greek]{FreeSerif}
+\newfontfamily\greekfontsf[Script=Greek]{FreeSans}
+
+\usepackage{amsmath}
+\usepackage{amssymb}
+\usepackage{graphicx}
+\usepackage{hyperref}
+\usepackage{geometry}
+\usepackage{listings}
+\usepackage{xcolor}
+
+\geometry{margin=1in}
+
+\title{Artificial Intelligence Project 2 - Phase A Report}
+\author{Ομάδα Εργασίας}
+\date{\today}
+
+\begin{document}
+
+\maketitle
+
+\section{Εισαγωγή}
+Η παρούσα αναφορά περιγράφει την υλοποίηση πρακτόρων τοπικής αναζήτησης σε μη-στατικά περιβάλλοντα χρησιμοποιώντας τη βιβλιοθήκη \texttt{ns-gym}. Εστιάζουμε στη βελτιστοποίηση της απόδοσης στο περιβάλλον CartPole-v1 μέσω του αλγορίθμου Simulated Annealing και της χρήσης προσαρμοσμένων wrappers.
+
+\section{Υλοποίηση Wrappers (\texttt{wrappers/wrappers.py})}
+Οι wrappers είναι απαραίτητοι για τον ανακαθορισμό της ανταμοιβής και τη διευκόλυνση του σχεδιασμού (planning).
+
+\subsection{ForwardWrapper}
+Υλοποιήθηκε η κλάση \texttt{ForwardWrapper} για την εξασφάλιση της πρόσβασης στις δυναμικές παραμέτρους του \texttt{ns-gym}. Χρησιμοποιεί την \texttt{\_\_getattr\_\_} για την προώθηση κλήσεων στο εσωτερικό περιβάλλον, επιτρέποντας στον πράκτορα να διαβάζει μεταβλητές όπως η βαρύτητα και η μάζα.
+
+\subsection{Reward Shaping καιPlanning}
+Στα περιβάλλοντα CartPole και MountainCar, η μέθοδος \texttt{step()} τροποποιήθηκε ώστε να προσθέτει τυχαίο θόρυβο:
+\begin{equation}
+    r_{noisy} = r_{orig} + 0.5 \cdot 2 \cdot (\text{rand}() - 0.5)
+\end{equation}
+
+Επιπλέον, η μέθοδος \texttt{reward(action)} επιτρέπει τον υπολογισμό της ανταμοιβής χωρίς την εκτέλεση πραγματικού βήματος, χρησιμοποιώντας τις φυσικές εξισώσεις του περιβάλλοντος.
+
+\section{Αλγόριθμος Simulated Annealing (SA)}
+Ο πράκτορας \texttt{SimulatedAnnealingAgent} χρησιμοποιεί μια στοχαστική προσέγγιση για την αποφυγή τοπικών μεγίστων.
+
+\subsection{Μηχανισμός Λήψης Απόφασης}
+Σε κάθε βήμα, ο πράκτορας αξιολογεί τις διαθέσιμες ενέργειες. Το κριτήριο αποδοχής μιας χειρότερης κίνησης βασίζεται στην πιθανότητα:
+\begin{equation}
+    P = e^{\frac{\Delta V}{T}}
+\end{equation}
+όπου $\Delta V$ είναι η διαφορά στην αξία μεταξύ της τυχαίας γειτονικής κίνησης και της τρέχουσας βέλτιστης, και $T$ είναι η τρέχουσα θερμοκρασία.
+
+\subsection{Ευρετική Συνάρτηση (Heuristic)}
+Για το CartPole, η απόδοση βελτιώθηκε σημαντικά με την υλοποίηση μιας ευρετικής που λαμβάνει υπόψη τη γωνία $\theta$, τη θέση $x$ και τη γωνιακή ταχύτητα $\dot{\theta}$:
+\begin{equation}
+    V = 10.0 - (10.0 \cdot \theta^2 + 0.1 \cdot x^2 + 0.5 \cdot \dot{\theta}^2)
+\end{equation}
+
+\subsection{Cooling Schedule}
+Η θερμοκρασία μειώνεται εκθετικά:
+\begin{equation}
+    T_{n+1} = \max(T_n \cdot \alpha, T_{min})
+\end{equation}
+με $\alpha = 0.99$ και $T_{min} = 0.001$.
+
+\section{Πειραματικά Αποτελέσματα}
+Τα πειράματα έδειξαν ότι ο SA πράκτορας υπερέχει σημαντικά του τυχαίου πράκτορα, ειδικά σε μεγάλα χρονικά διαστήματα (timesteps), παρά τη μη-στατικότητα του περιβάλλοντος.
+
+\begin{figure}[h]
+    \centering
+    %\includegraphics[width=0.8\textwidth]{exp1_CartPole_v1.png}
+    \caption{Σύγκριση μέσης ανταμοιβής μεταξύ Random και Simulated Annealing.}
+\end{figure}
+
+\begin{figure}[h]
+    \centering
+    %\includegraphics[width=0.8\textwidth]{sa_temperature_plot.png}
+    \caption{Μείωση της θερμοκρασίας του SA κατά τη διάρκεια του επεισοδίου.}
+\end{figure}
+
+\section{Συμπεράσματα}
+Η χρήση ισχυρών ευρετικών συναρτήσεων και ο σωστός συγχρονισμός των παραμέτρων στο \texttt{ns-gym} είναι καθοριστικά για την επιτυχία της τοπικής αναζήτησης. Ο Simulated Annealing αποδείχθηκε ικανός να διατηρεί το εκκρεμές όρθιο για πολύ περισσότερο χρόνο από τον τυχαίο πράκτορα, ακόμα και υπό συνθήκες μεταβαλλόμενης φυσικής.
+
+\end{document}

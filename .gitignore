@@ -3,3 +3,5 @@
 __pycache__
 *.png
 IMPLEMENTATION_GUIDE.md
+.tex
+REPORT_DRAFT.md

@@ -118,76 +118,79 @@ class SimulatedAnnealingAgent(LocalSearchAgent):
         self.min_temp = min_temp
 
     def act(self, env) -> int:
-        # Get current time step safely
+        """
+        Simulated Annealing act implementation using a robust 1-step deepcopy with strong heuristics.
+        """
         t = getattr(env, 't', 0)
-        
+
         action_values = {}
         for action in range(self.num_actions):
+            # We must use deepcopy because we need the physics engine to update the state correctly.
+            # The environment is non-stationary, so we must sync parameters.
             sim = deepcopy(env)
-            
-            # Sync non-stationary parameters from the real env to the sim env
-            # because get_planning_env() or deepcopy might not capture them correctly
-            # depending on how ns-gym is implemented.
-            target = sim.unwrapped
-            source = env.unwrapped
-            for attr in ['gravity', 'masscart', 'masspole', 'length', 'force_mag', 'tau']:
-                if hasattr(source, attr):
-                    setattr(target, attr, getattr(source, attr))
-            # Also for MountainCar
-            for attr in ['power', 'speed', 'min_position', 'max_position', 'goal_position']:
-                if hasattr(source, attr):
-                    setattr(target, attr, getattr(source, attr))
+            self._sync_attrs(env, sim)
             
             obs, reward, terminated, truncated, _ = sim.step(action)
             
-            # Extract state from observation (ns-gym returns a dict)
+            # Extract state
             state = obs['state'] if isinstance(obs, dict) else obs
-
-            # Overwrite reward with a clean heuristic to ignore the wrapper's noise
+            
+            # Use our custom strong heuristic for CartPole
             if self.domain_name == 'CartPole':
-                # state: [x, x_dot, theta, theta_dot]
                 x, x_dot, theta, theta_dot = state
-                # Heuristic: maximize survival quality
-                # Weighted: prioritize angle over position
-                reward = 1.0 - (0.2 * abs(x) / 2.4 + 0.8 * abs(theta) / 0.209)
+                if terminated:
+                    heuristic_reward = -100.0
+                else:
+                    # Penalize angle heavily, and velocity moderately
+                    heuristic_reward = 10.0 - (10.0 * (theta ** 2) + 0.1 * (x ** 2) + 0.5 * (theta_dot ** 2))
             elif self.domain_name == 'MountainCar':
-                # state: [position, velocity]
                 pos, vel = state
-                # Heuristic: energy based (potential + kinetic)
-                # This helps the agent "swing" to build momentum
-                reward = pos + 10.0 * (vel ** 2)
+                heuristic_reward = pos + 15.0 * (vel ** 2)
+            else:
+                heuristic_reward = reward
 
-            sim_t = t + 1
-            val = self.calculate_value(sim_t, reward, terminated, truncated)
+            val = self.calculate_value(t + 1, heuristic_reward, terminated, truncated)
             action_values[action] = val
 
         if not action_values:
             return -1
 
-        # Best neighbor
+        # 3. SA Decision Logic
         max_val = max(action_values.values())
         best_actions = [a for a, v in action_values.items() if v == max_val]
         best_action = np.random.choice(best_actions)
-        best_value = max_val
 
-        # Random neighbor
-        rand_action = np.random.choice(list(action_values.keys()))
-        rand_value = action_values[rand_action]
+        # For SA, compare best against a random neighbor
+        next_action = np.random.choice(list(action_values.keys()))
+        next_value = action_values[next_action]
 
-        # SA acceptance criterion
-        delta = rand_value - best_value
-        
+        delta = next_value - max_val
+
         if delta >= 0:
-            chosen = rand_action
+            chosen = next_action
         else:
-            # Low temperature makes it very greedy
-            prob = np.exp(delta / max(self.temperature, self.min_temp))
+            temp = max(self.temperature, self.min_temp)
+            prob = np.exp(delta / temp)
             if np.random.random() < prob:
-                chosen = rand_action
+                chosen = next_action
             else:
                 chosen = best_action
 
-        # Cooling schedule
         self.temperature = max(self.temperature * self.cooling_rate, self.min_temp)
-
         return chosen
+
+    def _sync_attrs(self, source_env, target_env):
+        """Syncs ns-gym non-stationary parameters from source to target environment."""
+        source = source_env.unwrapped
+        target = target_env.unwrapped
+        
+        # Common attributes across domains
+        attrs = ['gravity', 'tau', 'force_mag', 'masspole', 'masscart', 'length', 
+                 'power', 'speed', 'min_position', 'max_position', 'goal_position']
+        
+        for attr in attrs:
+            if hasattr(source, attr):
+                try:
+                    setattr(target, attr, getattr(source, attr))
+                except AttributeError:
+                    pass

@@ -8,109 +8,102 @@ class ForwardWrapper(gym.Wrapper):
         # fallback: forward attribute access to base env
         return getattr(self.env, name)
 
-
-    
     def __setattr__(self, name, value):
         # keep wrapper's own attributes local
-        if name in ["env", "truncated", "highest_reward"]:
+        if name in ["env", "truncated", "highest_reward", "num_actions"]:
             super().__setattr__(name, value)
         else:
-            setattr(self.env.unwrapped, name, value)
+            setattr(self.env, name, value)
 
 
-class ModifyTerminalStateRewardMountainCar(gym.Wrapper):
-    #TODO
+class ModifyTerminalStateRewardMountainCar(ForwardWrapper):
     def __init__(self, env):
         super().__init__(env)
-        #self.truncated = False
-        #self.highest_reward = 10_000
-
+        self.highest_reward = 10.0
 
     def step(self, action):
         state, reward, terminated, truncated, info = super().step(action)
-        reward += 0.5 * 2* (np.random.rand() - 0.5) # add some noise to the reward to make it more interesting 
-        #if truncated:
-        #    self.truncated = True
-        #    reward = self.highest_reward
-
+        # Add noise as requested by the assignment
+        reward += 0.5 * 2 * (np.random.rand() - 0.5)
         return state, reward, terminated, truncated, info
 
     def reward(self, action):
-        position, velocity = self.state
-        velocity += (action - 1) * self.force + math.cos(3 * position) * (-self.gravity)
-        velocity = np.clip(velocity, -self.max_speed, self.max_speed)
+        """
+        Fast simulation of the reward for a given action without changing state.
+        Uses MountainCar dynamics.
+        """
+        position, velocity = self.env.unwrapped.state
+        
+        # Physics update
+        velocity += (action - 1) * self.env.unwrapped.force + math.cos(3 * position) * (-self.env.unwrapped.gravity)
+        velocity = np.clip(velocity, -self.env.unwrapped.max_speed, self.env.unwrapped.max_speed)
         position += velocity
-        position = np.clip(position, self.min_position, self.max_position)
-        if position == self.min_position and velocity < 0:
+        position = np.clip(position, self.env.unwrapped.min_position, self.env.unwrapped.max_position)
+        
+        if position == self.env.unwrapped.min_position and velocity < 0:
             velocity = 0
 
         terminated = bool(
-            position >= self.goal_position and velocity >= self.goal_velocity
+            position >= self.env.unwrapped.goal_position and velocity >= self.env.unwrapped.goal_velocity
         )
-        return -1.0 if not terminated else -10
+        
+        # Reward logic: -1 per step, or a penalty/bonus
+        return -1.0 if not terminated else self.highest_reward
 
 
-
-
-class ModifyTerminalStateRewardCartPole(gym.Wrapper):
-    
+class ModifyTerminalStateRewardCartPole(ForwardWrapper):
     def __init__(self, env):
         super().__init__(env)
-        #self.truncated = False
-        #self.highest_reward = 10_000
-        #self.kinematics_integrator = ""
-
-
+        self.highest_reward = 100.0
 
     def step(self, action):
         state, reward, terminated, truncated, info = super().step(action)
-        reward += 0.5 * 2* (np.random.rand() - 0.5) # add some noise to the reward to make it more interesting 
-        """ if truncated:
-            self.truncated = True
-            reward = self.highest_reward """
-
+        # Add noise as requested by the assignment
+        reward += 0.5 * 2 * (np.random.rand() - 0.5)
         return state, reward, terminated, truncated, info
 
     def reward(self, action):
-        if self.truncated and action == -1:
-            return self.highest_reward
-            
-        x, x_dot, theta, theta_dot = self.state
-        force = self.force_mag if action == 1 else -self.force_mag
+        """
+        Fast simulation of the reward for a given action without changing state.
+        Uses CartPole dynamics.
+        """
+        x, x_dot, theta, theta_dot = self.env.unwrapped.state
+        force = self.env.unwrapped.force_mag if action == 1 else -self.env.unwrapped.force_mag
         costheta = np.cos(theta)
         sintheta = np.sin(theta)
 
-        # For the interested reader:
-        # https://coneural.org/florian/papers/05_cart_pole.pdf
-        temp = (
-            force + self.polemass_length * np.square(theta_dot) * sintheta
-        ) / self.total_mass
-        thetaacc = (self.gravity * sintheta - costheta * temp) / (
-            self.length
-            * (4.0 / 3.0 - self.masspole * np.square(costheta) / self.total_mass)
+        temp = (force + self.env.unwrapped.polemass_length * np.square(theta_dot) * sintheta) / self.env.unwrapped.total_mass
+        thetaacc = (self.env.unwrapped.gravity * sintheta - costheta * temp) / (
+            self.env.unwrapped.length * (4.0 / 3.0 - self.env.unwrapped.masspole * np.square(costheta) / self.env.unwrapped.total_mass)
         )
-        xacc = temp - self.polemass_length * thetaacc * costheta / self.total_mass
+        xacc = temp - self.env.unwrapped.polemass_length * thetaacc * costheta / self.env.unwrapped.total_mass
 
-        if self.kinematics_integrator == "euler":
-            x = x + self.tau * x_dot
-            x_dot = x_dot + self.tau * xacc
-            theta = theta + self.tau * theta_dot
-            theta_dot = theta_dot + self.tau * thetaacc
+        if self.env.unwrapped.kinematics_integrator == "euler":
+            x = x + self.env.unwrapped.tau * x_dot
+            x_dot = x_dot + self.env.unwrapped.tau * xacc
+            theta = theta + self.env.unwrapped.tau * theta_dot
+            theta_dot = theta_dot + self.env.unwrapped.tau * thetaacc
         else:  # semi-implicit euler
-            x_dot = x_dot + self.tau * xacc
-            x = x + self.tau * x_dot
-            theta_dot = theta_dot + self.tau * thetaacc
-            theta = theta + self.tau * theta_dot
+            x_dot = x_dot + self.env.unwrapped.tau * xacc
+            x = x + self.env.unwrapped.tau * x_dot
+            theta_dot = theta_dot + self.env.unwrapped.tau * thetaacc
+            theta = theta + self.env.unwrapped.tau * theta_dot
 
         terminated = bool(
-            x < -self.x_threshold
-            or x > self.x_threshold
-            or theta < -self.theta_threshold_radians
-            or theta > self.theta_threshold_radians
+            x < -self.env.unwrapped.x_threshold
+            or x > self.env.unwrapped.x_threshold
+            or theta < -self.env.unwrapped.theta_threshold_radians
+            or theta > self.env.unwrapped.theta_threshold_radians
         )
-        '''if terminated:
-            breakpoint()
-        reward = - (np.abs(x) - self.x_threshold) - (np.abs(theta) -self.theta_threshold_radians)'''
-        reward = - max(abs(x) / self.x_threshold, abs(theta) / self.theta_threshold_radians)
-        return -reward if not terminated else 0
-    
+        
+        if terminated:
+            return -100.0
+        
+        # We want to keep the pole perfectly upright (theta=0) and in the center (x=0)
+        # We also want to minimize the velocity to avoid swinging too fast
+        pos_penalty = (x / self.env.unwrapped.x_threshold) ** 2
+        angle_penalty = (theta / self.env.unwrapped.theta_threshold_radians) ** 2
+        vel_penalty = 0.1 * (theta_dot ** 2) + 0.01 * (x_dot ** 2)
+        
+        reward = 10.0 - (5.0 * angle_penalty + 1.0 * pos_penalty + vel_penalty)
+        return reward
