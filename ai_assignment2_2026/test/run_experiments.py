@@ -10,7 +10,10 @@ sys.path.append(str(Path(__file__).resolve().parents[1]))
 RESULTS_DIR = "results"
 os.makedirs(RESULTS_DIR, exist_ok=True)
 
-from agents.local_search_agents import SimulatedAnnealingAgent, HillClimbingAgent, TetsingAgent
+from agents.local_search_agents import (
+    SimulatedAnnealingAgent, 
+    TestingAgent
+)
 import ns_gym
 from ns_gym.wrappers import NSClassicControlWrapper
 from ns_gym.schedulers import ContinuousScheduler, PeriodicScheduler
@@ -39,10 +42,8 @@ def make_env(domain, timesteps, render=False):
 def make_agent(agent_name, num_actions, domain_name):
     if agent_name == "SimulatedAnnealing":
         return SimulatedAnnealingAgent(num_actions=num_actions, domain_name=domain_name)
-    elif agent_name == "HillClimbing":
-        return HillClimbingAgent(num_actions=num_actions, domain_name=domain_name)
     elif agent_name == "Random":
-        return TetsingAgent(num_actions=num_actions, domain_name=domain_name)
+        return TestingAgent(num_actions=num_actions, domain_name=domain_name)
 
 
 def run_episodes(domain, timesteps, n_episodes, seed=42):
@@ -85,9 +86,9 @@ def experiment_1(domain):
             mean_rewards[name].append(np.mean(results[name]))
 
     x = np.arange(len(max_timesteps_list))
-    width = 0.25
+    width = 0.35
     fig, ax = plt.subplots(figsize=(10, 6))
-    colors = ["#2196F3", "#4CAF50", "#FF9800"]
+    colors = ["#2196F3", "#FF9800"]
     for i, (name, color) in enumerate(zip(agent_names, colors)):
         bars = ax.bar(x + i * width, mean_rewards[name], width,
                       label=name, color=color, alpha=0.85)
@@ -96,7 +97,7 @@ def experiment_1(domain):
     ax.set_xlabel("Max Timesteps per Episode")
     ax.set_ylabel("Mean Cumulative Reward (100 episodes)")
     ax.set_title(f"Mean Cumulative Reward vs Max Timesteps — {domain}")
-    ax.set_xticks(x + width)
+    ax.set_xticks(x + width / 2)
     ax.set_xticklabels([str(ts) for ts in max_timesteps_list])
     ax.legend()
     ax.grid(axis="y", alpha=0.3)
@@ -122,7 +123,6 @@ def experiment_2(domain):
     results = run_episodes(domain, timesteps, n_episodes)
 
     def smooth(data, window=50):
-        # Προσαρμόζει το window αν τα δεδομένα είναι λίγα
         w = min(window, len(data))
         return np.convolve(data, np.ones(w)/w, mode="valid")
 

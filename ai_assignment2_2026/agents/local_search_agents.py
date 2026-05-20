@@ -77,6 +77,9 @@ class LocalSearchAgent:
             elif self.domain_name == "MountainCar":
                 sim_env = ModifyTerminalStateRewardMountainCar(deepcopy(env.get_planning_env()))
 
+            # SYNC TIME: Pass the current time to the planning environment
+            sim_env.t = getattr(env, 't', 0)
+
             action = self.project_act(sim_env)
             state, reward, terminated, truncated, info = env.step(action)
             value = self.calculate_value(
@@ -95,7 +98,7 @@ class LocalSearchAgent:
 
 
 
-class TetsingAgent(LocalSearchAgent):
+class TestingAgent(LocalSearchAgent):
     def __init__(self, num_actions, domain_name):
         super().__init__(num_actions, domain_name)
 
@@ -104,7 +107,7 @@ class TetsingAgent(LocalSearchAgent):
 
 class HillClimbingAgent(LocalSearchAgent):
     name = 'Hill_Climbing'
-    # TODO
+    # TODO: To be implemented by partner
 
 
 class SimulatedAnnealingAgent(LocalSearchAgent):
@@ -119,78 +122,46 @@ class SimulatedAnnealingAgent(LocalSearchAgent):
 
     def act(self, env) -> int:
         """
-        Simulated Annealing act implementation using a robust 1-step deepcopy with strong heuristics.
+        Simulated Annealing act implementation using the planning reward from the environment.
         """
         t = getattr(env, 't', 0)
-
         action_values = {}
-        for action in range(self.num_actions):
-            # We must use deepcopy because we need the physics engine to update the state correctly.
-            # The environment is non-stationary, so we must sync parameters.
-            sim = deepcopy(env)
-            self._sync_attrs(env, sim)
-            
-            obs, reward, terminated, truncated, _ = sim.step(action)
-            
-            # Extract state
-            state = obs['state'] if isinstance(obs, dict) else obs
-            
-            # Use our custom strong heuristic for CartPole
-            if self.domain_name == 'CartPole':
-                x, x_dot, theta, theta_dot = state
-                if terminated:
-                    heuristic_reward = -100.0
-                else:
-                    # Penalize angle heavily, and velocity moderately
-                    heuristic_reward = 10.0 - (10.0 * (theta ** 2) + 0.1 * (x ** 2) + 0.5 * (theta_dot ** 2))
-            elif self.domain_name == 'MountainCar':
-                pos, vel = state
-                heuristic_reward = pos + 15.0 * (vel ** 2)
-            else:
-                heuristic_reward = reward
 
-            val = self.calculate_value(t + 1, heuristic_reward, terminated, truncated)
+        # 1. Evaluate all possible actions using the environment's planning reward
+        for action in range(self.num_actions):
+            # The environment 'env' is already a planning copy provided by find_best_route
+            reward, terminated = env.reward(action)
+
+            # Use calculate_value to include time/truncation logic
+            val = self.calculate_value(t + 1, reward, terminated, False)
             action_values[action] = val
 
         if not action_values:
             return -1
 
-        # 3. SA Decision Logic
+        # 2. Find the best action (greedy)
         max_val = max(action_values.values())
         best_actions = [a for a, v in action_values.items() if v == max_val]
         best_action = np.random.choice(best_actions)
 
-        # For SA, compare best against a random neighbor
+        # 3. Choose a random action to potentially transition to
         next_action = np.random.choice(list(action_values.keys()))
         next_value = action_values[next_action]
 
+        # 4. SA Decision Logic
         delta = next_value - max_val
 
         if delta >= 0:
             chosen = next_action
         else:
             temp = max(self.temperature, self.min_temp)
+            # Accept a worse move with Boltzmann probability
             prob = np.exp(delta / temp)
             if np.random.random() < prob:
                 chosen = next_action
             else:
                 chosen = best_action
 
+        # 5. Update temperature
         self.temperature = max(self.temperature * self.cooling_rate, self.min_temp)
         return chosen
-
-    def _sync_attrs(self, source_env, target_env):
-        """Syncs ns-gym non-stationary parameters from source to target environment."""
-        source = source_env.unwrapped
-        target = target_env.unwrapped
-        
-        # Common attributes across domains
-        attrs = ['gravity', 'tau', 'force_mag', 'masspole', 'masscart', 'length', 
-                 'power', 'speed', 'min_position', 'max_position', 'goal_position']
-        
-        for attr in attrs:
-            if hasattr(source, attr):
-                try:
-                    setattr(target, attr, getattr(source, attr))
-                except AttributeError:
-                    pass

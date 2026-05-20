@@ -4,8 +4,7 @@ import sys
 from pathlib import Path
 sys.path.append(str(Path(__file__).resolve().parents[1]))
 
-from agents.local_search_agents import TetsingAgent
-from wrappers.wrappers import ModifyTerminalStateRewardCartPole, ModifyTerminalStateRewardMountainCar
+from agents.local_search_agents import TestingAgent, HillClimbingAgent, SimulatedAnnealingAgent
 import ns_gym
 from ns_gym.wrappers import NSClassicControlWrapper
 from ns_gym.schedulers import ContinuousScheduler, PeriodicScheduler
@@ -14,10 +13,11 @@ from ns_gym.update_functions import RandomWalk, IncrementUpdate
 
 def main(domain, timesteps):
     horizon = 10
-    env = gym.make(domain, render_mode="human", max_episode_steps= timesteps)
+    env = gym.make(domain, render_mode="rgb_array", max_episode_steps= timesteps)
     name, version = domain.split("-")
 
-    agent = TetsingAgent(num_actions = env.action_space.n, domain_name=name)
+    # Testing with SimulatedAnnealingAgent
+    agent = SimulatedAnnealingAgent(num_actions = env.action_space.n, domain_name=name)
 
     
     scheduler_1 = ContinuousScheduler()
