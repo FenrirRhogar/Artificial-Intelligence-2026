@@ -107,7 +107,33 @@ class TestingAgent(LocalSearchAgent):
 
 class HillClimbingAgent(LocalSearchAgent):
     name = 'Hill_Climbing'
+<<<<<<< Updated upstream
     # TODO: To be implemented by partner
+=======
+
+    def __init__(self, num_actions, domain_name):
+        super().__init__(num_actions, domain_name)
+
+    def act(self, env) -> int:
+        t = getattr(env, 't', 0)
+
+        next_eval = -np.inf
+        next_action = -1
+
+        for action in range(self.num_actions):
+            sim = deepcopy(env)
+            _, reward, terminated, truncated, _ = sim.step(action)
+
+            if terminated:
+                continue
+
+            val = self.calculate_value(t + 1, reward, terminated, truncated)
+            if val > next_eval:
+                next_eval = val
+                next_action = action
+
+        return next_action
+>>>>>>> Stashed changes
 
 
 class SimulatedAnnealingAgent(LocalSearchAgent):

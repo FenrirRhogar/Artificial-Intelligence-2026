@@ -51,7 +51,7 @@ def run_episodes(domain, timesteps, n_episodes, seed=42):
     Τρέχει n_episodes για κάθε agent, επιστρέφει
     dict: agent_name -> list of cumulative rewards
     """
-    agent_names = ["Random", "SimulatedAnnealing"]
+    agent_names = ["Random","HillClimbing", "SimulatedAnnealing"]
     results = {name: [] for name in agent_names}
 
     for agent_name in agent_names:
@@ -76,7 +76,7 @@ def run_episodes(domain, timesteps, n_episodes, seed=42):
 def experiment_1(domain):
     max_timesteps_list = [10, 100, 500, 1000]
     n_episodes = 100
-    agent_names = ["Random", "SimulatedAnnealing"]
+    agent_names = ["Random","HillClimbing", "SimulatedAnnealing"]
     mean_rewards = {name: [] for name in agent_names}
 
     for ts in max_timesteps_list:
@@ -117,7 +117,7 @@ def experiment_1(domain):
 def experiment_2(domain):
     timesteps = 100
     n_episodes = 1000
-    agent_names = ["Random", "SimulatedAnnealing"]
+    agent_names = ["Random", "HillClimbing","SimulatedAnnealing"]
 
     print(f"\n[Exp2 | {domain}] max_timesteps={timesteps}, episodes={n_episodes}")
     results = run_episodes(domain, timesteps, n_episodes)
@@ -158,6 +158,9 @@ if __name__ == "__main__":
         exp1 = experiment_1(domain)
         exp2 = experiment_2(domain)
 
-        print(f"\n[Summary Exp1 | {domain}]")
         for name in exp1:
+<<<<<<< Updated upstream
             print(f"  {name}: {exp1[name]}")
+=======
+            print(f"  {name}: {[round(float(v), 2) for v in exp1[name]]}")
+>>>>>>> Stashed changes
