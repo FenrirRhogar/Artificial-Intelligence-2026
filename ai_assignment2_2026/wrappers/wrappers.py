@@ -8,112 +8,109 @@ class ForwardWrapper(gym.Wrapper):
         # fallback: forward attribute access to base env
         return getattr(self.env, name)
 
+
+    
     def __setattr__(self, name, value):
         # keep wrapper's own attributes local
-        if name in ["env", "truncated", "highest_reward", "num_actions", "domain_name"]:
+        if name in ["env", "truncated", "highest_reward"]:
             super().__setattr__(name, value)
         else:
-            setattr(self.env, name, value)
+            setattr(self.env.unwrapped, name, value)
 
 
-class ModifyTerminalStateRewardMountainCar(ForwardWrapper):
+class ModifyTerminalStateRewardMountainCar(gym.Wrapper):
+    #TODO
     def __init__(self, env):
         super().__init__(env)
-        self.highest_reward = 10.0
-        self.domain_name = "MountainCar"
+        #self.truncated = False
+        #self.highest_reward = 10_000
 
-    def calculate_modified_reward(self, state, terminated):
-        pos, vel = state
-        
-        # Heuristic: Match original logic exactly
-        reward = pos + 15.0 * (vel ** 2)
-        return float(reward)
 
     def step(self, action):
         state, reward, terminated, truncated, info = super().step(action)
-        
-        # Override reward with our custom logic
-        reward = self.calculate_modified_reward(state, terminated)
-        
-        # Add noise as requested by the assignment
-        reward += 0.5 * 2 * (np.random.rand() - 0.5)
+        reward += 0.5 * 2* (np.random.rand() - 0.5) # add some noise to the reward to make it more interesting 
+        #if truncated:
+        #    self.truncated = True
+        #    reward = self.highest_reward
+
         return state, reward, terminated, truncated, info
 
     def reward(self, action):
-        position, velocity = self.env.unwrapped.state
-        
-        # Physics update
-        velocity += (action - 1) * self.env.unwrapped.force + math.cos(3 * position) * (-self.env.unwrapped.gravity)
-        velocity = np.clip(velocity, -self.env.unwrapped.max_speed, self.env.unwrapped.max_speed)
+        position, velocity = self.state
+        velocity += (action - 1) * self.force + math.cos(3 * position) * (-self.gravity)
+        velocity = np.clip(velocity, -self.max_speed, self.max_speed)
         position += velocity
-        position = np.clip(position, self.env.unwrapped.min_position, self.env.unwrapped.max_position)
-        
-        if position == self.env.unwrapped.min_position and velocity < 0:
+        position = np.clip(position, self.min_position, self.max_position)
+        if position == self.min_position and velocity < 0:
             velocity = 0
 
         terminated = bool(
-            position >= self.env.unwrapped.goal_position and velocity >= self.env.unwrapped.goal_velocity
+            position >= self.goal_position and velocity >= self.goal_velocity
         )
-        
-        reward = self.calculate_modified_reward((position, velocity), terminated)
-        return reward, terminated
+        return -1.0 if not terminated else -10
 
 
-class ModifyTerminalStateRewardCartPole(ForwardWrapper):
+
+
+class ModifyTerminalStateRewardCartPole(gym.Wrapper):
+    
     def __init__(self, env):
         super().__init__(env)
-        self.highest_reward = 100.0
-        self.domain_name = "CartPole"
+        #self.truncated = False
+        #self.highest_reward = 10_000
+        #self.kinematics_integrator = ""
 
-    def calculate_modified_reward(self, state, terminated):
-        x, x_dot, theta, theta_dot = state
-        
-        if terminated:
-            return -100.0
-        
-        # Penalize angle heavily, and velocity/position moderately
-        reward = 10.0 - (10.0 * (theta ** 2) + 0.1 * (x ** 2) + 0.5 * (theta_dot ** 2))
-        return float(reward)
+
 
     def step(self, action):
         state, reward, terminated, truncated, info = super().step(action)
-        
-        # Override reward with our custom logic
-        reward = self.calculate_modified_reward(state, terminated)
-        
-        # Add noise as requested by the assignment
-        reward += 0.5 * 2 * (np.random.rand() - 0.5)
+        reward += 0.5 * 2* (np.random.rand() - 0.5) # add some noise to the reward to make it more interesting 
+        """ if truncated:
+            self.truncated = True
+            reward = self.highest_reward """
+
         return state, reward, terminated, truncated, info
 
     def reward(self, action):
-        x, x_dot, theta, theta_dot = self.env.unwrapped.state
-        force = self.env.unwrapped.force_mag if action == 1 else -self.env.unwrapped.force_mag
+        if self.truncated and action == -1:
+            return self.highest_reward
+            
+        x, x_dot, theta, theta_dot = self.state
+        force = self.force_mag if action == 1 else -self.force_mag
         costheta = np.cos(theta)
         sintheta = np.sin(theta)
 
-        temp = (force + self.env.unwrapped.polemass_length * np.square(theta_dot) * sintheta) / self.env.unwrapped.total_mass
-        thetaacc = (self.env.unwrapped.gravity * sintheta - costheta * temp) / (
-            self.env.unwrapped.length * (4.0 / 3.0 - self.env.unwrapped.masspole * np.square(costheta) / self.env.unwrapped.total_mass)
+        # For the interested reader:
+        # https://coneural.org/florian/papers/05_cart_pole.pdf
+        temp = (
+            force + self.polemass_length * np.square(theta_dot) * sintheta
+        ) / self.total_mass
+        thetaacc = (self.gravity * sintheta - costheta * temp) / (
+            self.length
+            * (4.0 / 3.0 - self.masspole * np.square(costheta) / self.total_mass)
         )
-        xacc = temp - self.env.unwrapped.polemass_length * thetaacc * costheta / self.env.unwrapped.total_mass
+        xacc = temp - self.polemass_length * thetaacc * costheta / self.total_mass
 
-        if self.env.unwrapped.kinematics_integrator == "euler":
-            x = x + self.env.unwrapped.tau * x_dot
-            x_dot = x_dot + self.env.unwrapped.tau * xacc
-            theta = theta + self.env.unwrapped.tau * theta_dot
-            theta_dot = theta_dot + self.env.unwrapped.tau * thetaacc
+        if self.kinematics_integrator == "euler":
+            x = x + self.tau * x_dot
+            x_dot = x_dot + self.tau * xacc
+            theta = theta + self.tau * theta_dot
+            theta_dot = theta_dot + self.tau * thetaacc
         else:  # semi-implicit euler
-            x_dot = x_dot + self.env.unwrapped.tau * xacc
-            x = x + self.env.unwrapped.tau * x_dot
-            theta_dot = theta_dot + self.env.unwrapped.tau * thetaacc
-            theta = theta + self.env.unwrapped.tau * theta_dot
+            x_dot = x_dot + self.tau * xacc
+            x = x + self.tau * x_dot
+            theta_dot = theta_dot + self.tau * thetaacc
+            theta = theta + self.tau * theta_dot
 
         terminated = bool(
-            x < -self.env.unwrapped.x_threshold
-            or x > self.env.unwrapped.x_threshold
-            or theta < -self.env.unwrapped.theta_threshold_radians
-            or theta > self.env.unwrapped.theta_threshold_radians
+            x < -self.x_threshold
+            or x > self.x_threshold
+            or theta < -self.theta_threshold_radians
+            or theta > self.theta_threshold_radians
         )
-        
-        reward = self.calculate_modified_reward((x, x_dot, theta, theta_dot), terminated)
-        return reward, terminated
+        '''if terminated:
+            breakpoint()
+        reward = - (np.abs(x) - self.x_threshold) - (np.abs(theta) -self.theta_threshold_radians)'''
+        reward = - max(abs(x) / self.x_threshold, abs(theta) / self.theta_threshold_radians)
+        return -reward if not terminated else 0
+    
