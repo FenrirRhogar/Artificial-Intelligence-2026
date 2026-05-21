@@ -11,7 +11,9 @@ RESULTS_DIR = "results"
 os.makedirs(RESULTS_DIR, exist_ok=True)
 
 from agents.local_search_agents import (
-    SimulatedAnnealingAgent, 
+    SimulatedAnnealingAgent,
+    HillClimbingAgent,
+    RandomizedHillClimbingAgent,
     TestingAgent
 )
 import ns_gym
@@ -42,6 +44,10 @@ def make_env(domain, timesteps, render=False):
 def make_agent(agent_name, num_actions, domain_name):
     if agent_name == "SimulatedAnnealing":
         return SimulatedAnnealingAgent(num_actions=num_actions, domain_name=domain_name)
+    elif agent_name == "HillClimbing":
+        return HillClimbingAgent(num_actions=num_actions, domain_name=domain_name)
+    elif agent_name == "RandomizedHillClimbing":
+        return RandomizedHillClimbingAgent(num_actions=num_actions, domain_name=domain_name)
     elif agent_name == "Random":
         return TestingAgent(num_actions=num_actions, domain_name=domain_name)
 
@@ -51,7 +57,7 @@ def run_episodes(domain, timesteps, n_episodes, seed=42):
     Τρέχει n_episodes για κάθε agent, επιστρέφει
     dict: agent_name -> list of cumulative rewards
     """
-    agent_names = ["Random","HillClimbing", "SimulatedAnnealing"]
+    agent_names = ["Random", "HillClimbing", "RandomizedHillClimbing", "SimulatedAnnealing"]
     results = {name: [] for name in agent_names}
 
     for agent_name in agent_names:
@@ -76,7 +82,7 @@ def run_episodes(domain, timesteps, n_episodes, seed=42):
 def experiment_1(domain):
     max_timesteps_list = [10, 100, 500, 1000]
     n_episodes = 100
-    agent_names = ["Random","HillClimbing", "SimulatedAnnealing"]
+    agent_names = ["Random", "HillClimbing", "RandomizedHillClimbing", "SimulatedAnnealing"]
     mean_rewards = {name: [] for name in agent_names}
 
     for ts in max_timesteps_list:
@@ -86,9 +92,9 @@ def experiment_1(domain):
             mean_rewards[name].append(np.mean(results[name]))
 
     x = np.arange(len(max_timesteps_list))
-    width = 0.35
-    fig, ax = plt.subplots(figsize=(10, 6))
-    colors = ["#2196F3", "#FF9800"]
+    width = 0.2
+    fig, ax = plt.subplots(figsize=(12, 6))
+    colors = ["#2196F3", "#FF9800", "#4CAF50", "#E91E63"]
     for i, (name, color) in enumerate(zip(agent_names, colors)):
         bars = ax.bar(x + i * width, mean_rewards[name], width,
                       label=name, color=color, alpha=0.85)
@@ -97,7 +103,7 @@ def experiment_1(domain):
     ax.set_xlabel("Max Timesteps per Episode")
     ax.set_ylabel("Mean Cumulative Reward (100 episodes)")
     ax.set_title(f"Mean Cumulative Reward vs Max Timesteps — {domain}")
-    ax.set_xticks(x + width / 2)
+    ax.set_xticks(x + width * len(agent_names) / 2)
     ax.set_xticklabels([str(ts) for ts in max_timesteps_list])
     ax.legend()
     ax.grid(axis="y", alpha=0.3)
@@ -117,7 +123,7 @@ def experiment_1(domain):
 def experiment_2(domain):
     timesteps = 100
     n_episodes = 1000
-    agent_names = ["Random", "HillClimbing","SimulatedAnnealing"]
+    agent_names = ["Random", "HillClimbing", "RandomizedHillClimbing", "SimulatedAnnealing"]
 
     print(f"\n[Exp2 | {domain}] max_timesteps={timesteps}, episodes={n_episodes}")
     results = run_episodes(domain, timesteps, n_episodes)
@@ -127,7 +133,7 @@ def experiment_2(domain):
         return np.convolve(data, np.ones(w)/w, mode="valid")
 
     fig, ax = plt.subplots(figsize=(12, 6))
-    colors = ["#2196F3", "#FF9800"]
+    colors = ["#2196F3", "#FF9800", "#4CAF50", "#E91E63"]
     for name, color in zip(agent_names, colors):
         raw = results[name]
         w = min(50, len(raw))
@@ -157,10 +163,3 @@ if __name__ == "__main__":
         print(f"{'='*50}")
         exp1 = experiment_1(domain)
         exp2 = experiment_2(domain)
-
-        for name in exp1:
-<<<<<<< Updated upstream
-            print(f"  {name}: {exp1[name]}")
-=======
-            print(f"  {name}: {[round(float(v), 2) for v in exp1[name]]}")
->>>>>>> Stashed changes

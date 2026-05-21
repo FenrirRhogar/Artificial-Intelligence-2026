@@ -107,9 +107,6 @@ class TestingAgent(LocalSearchAgent):
 
 class HillClimbingAgent(LocalSearchAgent):
     name = 'Hill_Climbing'
-<<<<<<< Updated upstream
-    # TODO: To be implemented by partner
-=======
 
     def __init__(self, num_actions, domain_name):
         super().__init__(num_actions, domain_name)
@@ -133,37 +130,53 @@ class HillClimbingAgent(LocalSearchAgent):
                 next_action = action
 
         return next_action
->>>>>>> Stashed changes
+class RandomizedHillClimbingAgent(LocalSearchAgent):
+    name = 'Randomized_Hill_Climbing'
+
+    def __init__(self, num_actions, domain_name):
+        super().__init__(num_actions, domain_name)
+
+    def act(self, env) -> int:
+        t = getattr(env, 't', 0)
+        uphill_actions = []
+
+        for action in range(self.num_actions):
+            sim = deepcopy(env)
+            _, reward, terminated, truncated, _ = sim.step(action)
+
+            if terminated:
+                continue
+
+            val = self.calculate_value(t + 1, reward, terminated, truncated)
+            if val > self.current_value:
+                uphill_actions.append(action)
+
+        if not uphill_actions:
+            return -1
+
+        return np.random.choice(uphill_actions)
+    
 
 
 class SimulatedAnnealingAgent(LocalSearchAgent):
     name = 'Simulated_Annealing'
 
     def __init__(self, num_actions, domain_name,
-                 initial_temp=0.01, cooling_rate=0.99, min_temp=1e-3):
+                 initial_temp=10.0, cooling_rate=0.99, min_temp=1e-3):
         super().__init__(num_actions, domain_name)
         self.temperature = initial_temp
         self.cooling_rate = cooling_rate
         self.min_temp = min_temp
 
     def act(self, env) -> int:
-        """
-        Simulated Annealing act implementation using the planning reward from the environment.
-        """
         t = getattr(env, 't', 0)
         action_values = {}
 
-        # 1. Evaluate all possible actions using the environment's planning reward
         for action in range(self.num_actions):
-            # The environment 'env' is already a planning copy provided by find_best_route
-            reward, terminated = env.reward(action)
-
-            # Use calculate_value to include time/truncation logic
-            val = self.calculate_value(t + 1, reward, terminated, False)
+            sim = deepcopy(env)
+            _, reward, terminated, truncated, _ = sim.step(action)
+            val = self.calculate_value(t + 1, reward, terminated, truncated)
             action_values[action] = val
-
-        if not action_values:
-            return -1
 
         # 2. Find the best action (greedy)
         max_val = max(action_values.values())
