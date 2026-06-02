@@ -130,6 +130,7 @@ class HillClimbingAgent(LocalSearchAgent):
                 next_action = action
 
         return next_action
+    
 class RandomizedHillClimbingAgent(LocalSearchAgent):
     name = 'Randomized_Hill_Climbing'
 
@@ -138,7 +139,7 @@ class RandomizedHillClimbingAgent(LocalSearchAgent):
 
     def act(self, env) -> int:
         t = getattr(env, 't', 0)
-        uphill_actions = []
+        actions = []
 
         for action in range(self.num_actions):
             sim = deepcopy(env)
@@ -149,14 +150,12 @@ class RandomizedHillClimbingAgent(LocalSearchAgent):
 
             val = self.calculate_value(t + 1, reward, terminated, truncated)
             if val > self.current_value:
-                uphill_actions.append(action)
+                actions.append(action)
 
-        if not uphill_actions:
+        if not actions:
             return -1
 
-        return np.random.choice(uphill_actions)
-    
-
+        return np.random.choice(actions)
 
 class SimulatedAnnealingAgent(LocalSearchAgent):
     name = 'Simulated_Annealing'
@@ -175,32 +174,33 @@ class SimulatedAnnealingAgent(LocalSearchAgent):
         for action in range(self.num_actions):
             sim = deepcopy(env)
             _, reward, terminated, truncated, _ = sim.step(action)
+
+            if terminated:
+                continue
             val = self.calculate_value(t + 1, reward, terminated, truncated)
             action_values[action] = val
+        
+        if not action_values:
+            return -1
 
-        # 2. Find the best action (greedy)
         max_val = max(action_values.values())
         best_actions = [a for a, v in action_values.items() if v == max_val]
         best_action = np.random.choice(best_actions)
 
-        # 3. Choose a random action to potentially transition to
         next_action = np.random.choice(list(action_values.keys()))
         next_value = action_values[next_action]
 
-        # 4. SA Decision Logic
-        delta = next_value - max_val
+        delta = next_value - self.current_value
 
         if delta >= 0:
             chosen = next_action
         else:
             temp = max(self.temperature, self.min_temp)
-            # Accept a worse move with Boltzmann probability
             prob = np.exp(delta / temp)
             if np.random.random() < prob:
                 chosen = next_action
             else:
                 chosen = best_action
 
-        # 5. Update temperature
         self.temperature = max(self.temperature * self.cooling_rate, self.min_temp)
         return chosen

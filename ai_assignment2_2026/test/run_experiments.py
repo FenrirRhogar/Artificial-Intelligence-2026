@@ -157,7 +157,6 @@ def experiment_2(domain):
 
 if __name__ == "__main__":
     for domain in ["CartPole-v1", "MountainCar-v0"]:
-    #for domain in ["CartPole-v1"]:
         print(f"\n{'='*50}")
         print(f"DOMAIN: {domain}")
         print(f"{'='*50}")

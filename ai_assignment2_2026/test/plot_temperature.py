@@ -17,11 +17,9 @@ def plot_sa_temperature(initial_temp=0.01, cooling_rate=0.99, min_temp=1e-3, ste
     plt.xlabel('Timesteps', fontsize=12)
     plt.ylabel('Temperature', fontsize=12)
     
-    # Set specific ticks for the timesteps requested: 10, 100, 500, 1000
     custom_ticks = [10, 100, 500, 1000]
     plt.xticks(custom_ticks)
     
-    # Add vertical lines to highlight these specific timesteps
     for tick in custom_ticks:
         plt.axvline(x=tick, color='gray', linestyle=':', alpha=0.4)
     
@@ -35,5 +33,4 @@ def plot_sa_temperature(initial_temp=0.01, cooling_rate=0.99, min_temp=1e-3, ste
     print(f"Plot saved as {output_file}")
 
 if __name__ == "__main__":
-    # Parameters matched with agents/local_search_agents.py
-    plot_sa_temperature(initial_temp=0.01, cooling_rate=0.99, min_temp=1e-3, steps=1000)
+    plot_sa_temperature(initial_temp=10.0, cooling_rate=0.99, min_temp=1e-3, steps=1000)
