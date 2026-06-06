@@ -32,15 +32,16 @@ from agents.MCTS import MCTSAgent, InformedMCTSAgent
 # ---------------------------------------------------------------------------
 DOMAINS      = ['CartPole-v1', 'MountainCar-v0']
 NOISE_LEVELS = [0.0, 0.1, 0.3]
-NUM_EPISODES = 10
+NUM_EPISODES = 5
 NUM_REPEATS  = 1
 RENDER_MODE  = None   # overridden by --render flag
 
 RESULTS_DIR = Path(__file__).resolve().parent / 'results' / 'sanity'
+REPO_ROOT = Path(__file__).resolve().parents[1]
 
 DQN_MODEL_PATHS = {
-    'CartPole-v1':    'agents/DDQN_models/CartPole-v1/DDQN_episode_13271959.pth',
-    'MountainCar-v0': 'agents/DDQN_models/MountainCar-v0/DDQN_episode_2118775.pth',
+    'CartPole-v1':    str(REPO_ROOT / 'agents/DDQN_models/CartPole-v1/DDQN_episode_13271959.pth'),
+    'MountainCar-v0': str(REPO_ROOT / 'agents/DDQN_models/MountainCar-v0/DDQN_episode_2118775.pth'),
 }
 # ---------------------------------------------------------------------------
 
@@ -89,16 +90,15 @@ def make_agent(algorithm, planning_env, guidance_agent=None, noise_level=0.0):
     raise ValueError(f'unknown algorithm {algorithm}')
 
 
-def run_config(domain, algorithm, noise_level, tree_path=None, tree_title=None):
+def run_config(domain, algorithm, noise_level, save_path=None):
     '''Run NUM_EPISODES episodes; return list of cumulative episodic rewards.
 
-    If tree_path is given, the search tree from the very first act() is saved
-    there as a PNG (one representative figure).
+    If save_path is given, the partial reward array is written to disk after
+    every episode so progress survives a crash mid-config.
     '''
     base_env, ns_env = make_ns_env(domain)
     guidance_agent = load_guidance_agent(domain, base_env) if algorithm == 'inf_mcts' else None
 
-    saved_tree = False
     rewards = []
     for _ in tqdm(range(NUM_EPISODES),
                   desc=f'{domain} | {algorithm} | noise={noise_level}', leave=False):
@@ -110,16 +110,28 @@ def run_config(domain, algorithm, noise_level, tree_path=None, tree_title=None):
         done = truncated = False
         while not (done or truncated):
             action = agent.act(obs, planning_env)
-            if tree_path is not None and not saved_tree:
-                agent.plot_tree(path=tree_path, title=tree_title)
-                saved_tree = True
             obs, reward, done, truncated, _ = ns_env.step(action)
             planning_env = ns_env.get_planning_env()
             episode_reward += reward
         rewards.append(episode_reward)
 
+        if save_path is not None:
+            np.save(save_path, np.asarray(rewards, dtype=np.float32))
+
     base_env.close()
     return rewards
+
+
+ENV_SHORT = {'CartPole-v1': 'cartpole', 'MountainCar-v0': 'mountaincar'}
+ALGO_SHORT = {'mcts': 'mcts', 'inf_mcts': 'informed_mcts'}
+
+
+def png_name(domain, algorithm, noise_level):
+    '''Build PNG stem: <algorithm>_<environment>_<noise>.'''
+    env  = ENV_SHORT[domain]
+    algo = ALGO_SHORT[algorithm]
+    noise = noise_level if noise_level is not None else 0.0
+    return f'{algo}_{env}_{noise}'
 
 
 def experiment_labels(algorithm_filter='all'):
@@ -140,17 +152,19 @@ def run_all(algorithm_filter='all'):
 
     for domain in DOMAINS:
         for label, algorithm, noise_level in labels:
+            out_path = RESULTS_DIR / f'{domain}__{label}.npy'
             repeats = []
             for r in range(NUM_REPEATS):
                 print(f'[SANITY] [{domain}] {label}  repeat {r + 1}/{NUM_REPEATS}')
-                # save one representative search-tree figure (first repeat only)
-                safe = label.replace(' ', '_').replace('=', '').replace('.', '')
-                tree_path = (RESULTS_DIR / f'{domain}__{safe}_tree.png') if r == 0 else None
                 repeats.append(run_config(domain, algorithm, noise_level or 0.0,
-                                          tree_path=tree_path, tree_title=f'[Sanity] {label} — {domain}'))
+                                          save_path=out_path))
+                # persist all completed repeats after each repeat
+                np.save(out_path, np.asarray(repeats, dtype=np.float32))
             arr = np.asarray(repeats, dtype=np.float32)   # (NUM_REPEATS, NUM_EPISODES)
             results[domain][label] = arr
-            np.save(RESULTS_DIR / f'{domain}__{label}.npy', arr)
+            np.save(out_path, arr)
+            # All repeats done for this config -> save its plot now.
+            plot_config(domain, label, algorithm, noise_level, arr)
 
     return results, labels
 
@@ -160,14 +174,28 @@ def run_all(algorithm_filter='all'):
 # ---------------------------------------------------------------------------
 
 def _line_plot(ax, arr, label, color=None):
-    '''Plot mean on ax; std band only when NUM_REPEATS > 1.'''
+    '''Plot mean on ax.'''
     mean = arr.mean(axis=0)
     x    = np.arange(1, mean.shape[0] + 1)
-    line, = ax.plot(x, mean, label=label, color=color)
-    if arr.shape[0] > 1:
-        std = arr.std(axis=0)
-        ax.fill_between(x, mean - std, mean + std, alpha=0.2,
-                        color=line.get_color())
+    ax.plot(x, mean, label=label, color=color)
+
+
+def plot_config(domain, label, algorithm, noise_level, arr):
+    '''Save individual plot for one finished (domain, label) config.'''
+    import matplotlib.pyplot as plt
+
+    fig, ax = plt.subplots(figsize=(8, 5))
+    _line_plot(ax, arr, label)
+    noise_str = f', noise={noise_level}' if noise_level is not None else ''
+    ax.set_title(f'[Sanity] {label} — {domain}{noise_str}')
+    ax.set_xlabel('Episode')
+    ax.set_ylabel('Cumulative reward')
+    ax.legend(fontsize=8)
+    ax.grid(True, alpha=0.3)
+    out = RESULTS_DIR / f'{png_name(domain, algorithm, noise_level)}.png'
+    fig.savefig(out, dpi=150, bbox_inches='tight')
+    print(f'saved: {out}')
+    plt.close(fig)
 
 
 def plot_results(results, labels):
@@ -187,26 +215,14 @@ def plot_results(results, labels):
             ax.set_ylabel('Cumulative reward')
             ax.legend(fontsize=8)
             ax.grid(True, alpha=0.3)
-            out = RESULTS_DIR / f'{domain}_combined.png'
+            out = RESULTS_DIR / f'{ENV_SHORT[domain]}_combined.png'
             fig.savefig(out, dpi=150, bbox_inches='tight')
             print(f'saved: {out}')
             plt.close(fig)
 
         # ---- 2. Individual plots (one per algorithm label) --------------------
-        for (label, algorithm, noise_level), color in zip(labels, colors):
-            fig, ax = plt.subplots(figsize=(8, 5))
-            _line_plot(ax, results[domain][label], label, color)
-            noise_str = f', noise={noise_level}' if noise_level is not None else ''
-            ax.set_title(f'[Sanity] {label} — {domain}{noise_str}')
-            ax.set_xlabel('Episode')
-            ax.set_ylabel('Cumulative reward')
-            ax.legend(fontsize=8)
-            ax.grid(True, alpha=0.3)
-            safe_label = label.replace(' ', '_').replace('=', '').replace('.', '')
-            out = RESULTS_DIR / f'{domain}__{safe_label}.png'
-            fig.savefig(out, dpi=150, bbox_inches='tight')
-            print(f'saved: {out}')
-            plt.close(fig)
+        for (label, algorithm, noise_level) in labels:
+            plot_config(domain, label, algorithm, noise_level, results[domain][label])
 
 
 # ---------------------------------------------------------------------------

@@ -39,18 +39,26 @@ class _Node:
 class MCTSAgent(base.Agent):
     """Standard Monte Carlo Tree Search with UCT.
 
-    Re-plans from scratch each act() call. Rollout runs to natural episode end
-    (no depth cap, no discount). Node values are min-max normalized to [0,1]
-    so the fixed exploration constant c=sqrt(2) is well scaled.
+    Reuses the search tree across act() calls: after an action is chosen, the
+    corresponding child becomes the new root and its entire subtree (with all
+    accumulated visit counts and returns) is retained; the old root and its
+    other branches are discarded. The re-rooted node is re-grounded to the
+    current real env so simulations plan from the live state/dynamics.
+    Rollout runs to natural episode end (no depth cap, no discount). Node
+    values are min-max normalized to [0,1] so the fixed exploration constant
+    c=sqrt(2) is well scaled.
     """
     def __init__(self, env, num_simulations=100, c=math.sqrt(2)):
         self.env = env
         self.num_simulations = num_simulations
         self.c = c
+        self.root = None            # persisted tree across act() calls
+        self.last_action = None     # action chosen on the previous act()
 
     # ----- public API ------------------------------------------------------
     def act(self, observation, env):
-        root = _Node(deepcopy(env), obs=observation)
+        root = self._advance_root(observation, env)
+        self.root = root
         self._vmin = math.inf
         self._vmax = -math.inf
 
@@ -60,92 +68,29 @@ class MCTSAgent(base.Agent):
             g = self._rollout(child)
             self._backprop(child, g)
 
-        self.last_root = root   # kept for render_tree()
         # robust choice: most visited child
-        return max(root.children.items(), key=lambda kv: kv[1].N)[0]
+        self.last_action = max(root.children.items(), key=lambda kv: kv[1].N)[0]
+        return self.last_action
 
-    # ----- debug visualization ---------------------------------------------
-    def render_tree(self, max_depth=2):
-        """Print the last search tree as ASCII. action [N=.. Q=.. P=..]."""
-        root = getattr(self, 'last_root', None)
-        if root is None:
-            print('(no tree yet — call act() first)')
-            return
+    def _advance_root(self, observation, env):
+        """Reuse the subtree under the previously chosen action as the new root.
 
-        def walk(node, depth, prefix):
-            if depth > max_depth:
-                return
-            for a, ch in sorted(node.children.items(),
-                                key=lambda kv: kv[1].N, reverse=True):
-                q = ch.W / ch.N if ch.N else 0.0
-                p = node.priors[a] if node.priors is not None else None
-                ptxt = f' P={p:.2f}' if p is not None else ''
-                term = ' [terminal]' if ch.done else ''
-                print(f'{prefix}a={a} [N={ch.N} Q={q:.2f}{ptxt}]{term}')
-                walk(ch, depth + 1, prefix + '   ')
-
-        print(f'ROOT [N={root.N}]')
-        walk(root, 1, '   ')
-
-    def plot_tree(self, path=None, ax=None, max_depth=2, title=None):
-        """Plot the last search tree with matplotlib.
-
-        Layered layout: depth on y, tidy x. Node label = visits N and mean Q
-        (and prior P for the informed agent). Saves to `path` if given.
-        Returns the matplotlib Axes.
+        Falls back to a fresh root when there is no prior tree or the chosen
+        action was never expanded. The retained node keeps its statistics and
+        children but is re-grounded to the live env so new expansions/rollouts
+        use the current state and (non-stationary) dynamics.
         """
-        import matplotlib.pyplot as plt
-
-        root = getattr(self, 'last_root', None)
-        if root is None:
-            raise RuntimeError('no tree yet — call act() first')
-
-        # assign positions: x by leaf order, y by -depth
-        pos = {}
-        self._leaf_x = 0
-
-        def layout(node, depth):
-            kids = [ch for _, ch in sorted(node.children.items())]
-            if depth >= max_depth or not kids:
-                x = self._leaf_x
-                self._leaf_x += 1
-            else:
-                xs = [layout(ch, depth + 1) for ch in kids]
-                x = sum(xs) / len(xs)
-            pos[id(node)] = (x, -depth)
-            return x
-
-        layout(root, 0)
-
-        if ax is None:
-            fig, ax = plt.subplots(figsize=(max(6, self._leaf_x * 0.9), 4))
-
-        def draw(node, depth, parent_action=None):
-            x, y = pos[id(node)]
-            if node.parent is not None:
-                px, py = pos[id(node.parent)]
-                ax.plot([px, x], [py, y], color='gray', lw=0.8, zorder=1)
-            q = node.W / node.N if node.N else 0.0
-            if node.parent is None:
-                lbl = f'root\nN={node.N}'
-            else:
-                p = node.parent.priors[node.action_in] if node.parent.priors is not None else None
-                lbl = f'a={node.action_in}\nN={node.N}\nQ={q:.1f}'
-                if p is not None:
-                    lbl += f'\nP={p:.2f}'
-            color = '#d9534f' if node.done else '#5bc0de'
-            ax.scatter([x], [y], s=600, color=color, zorder=2, edgecolors='k')
-            ax.annotate(lbl, (x, y), ha='center', va='center', fontsize=6, zorder=3)
-            if depth < max_depth:
-                for _, ch in sorted(node.children.items()):
-                    draw(ch, depth + 1)
-
-        draw(root, 0)
-        ax.set_title(title or f'MCTS tree (sims={self.num_simulations})')
-        ax.axis('off')
-        if path is not None:
-            ax.figure.savefig(path, dpi=150, bbox_inches='tight')
-        return ax
+        if self.root is not None and self.last_action is not None:
+            child = self.root.children.get(self.last_action)
+            if child is not None:
+                child.parent = None          # detach old root + sibling branches
+                child.action_in = None
+                child.reward = 0.0           # no parent return to shift into
+                child.env = deepcopy(env)     # ground to real current state
+                child.obs = observation
+                child.priors = None          # recompute under current state
+                return child
+        return _Node(deepcopy(env), obs=observation)
 
     # ----- MCTS phases -----------------------------------------------------
     def _select(self, node):
@@ -190,7 +135,8 @@ class MCTSAgent(base.Agent):
 
     # ----- selection score / normalization ---------------------------------
     def _score(self, parent, child):
-        q = self._normalize(child.W / child.N)
+        # textbook UCB1:  X̄_i + c * sqrt(ln N / n_i)   (raw average reward)
+        q = child.W / child.N
         return q + self.c * math.sqrt(math.log(parent.N) / child.N)
 
     def _track(self, q):
@@ -206,7 +152,6 @@ class MCTSAgent(base.Agent):
     def _priors(self, node):
         return None
 
-'''
 class InformedMCTSAgent(MCTSAgent):
     """MCTS with AlphaGo-style PUCT selection.
 
@@ -214,7 +159,7 @@ class InformedMCTSAgent(MCTSAgent):
     normalized value with a DQN-mentor prior P(s,a) (informed UCT).
     """
     def __init__(self, env, guidance_agent, noise_level=0.0,
-                 num_simulations=100, c=math.sqrt(2)):
+                 num_simulations=100, c=1):
         super().__init__(env, num_simulations=num_simulations, c=c)
         self.guidance_agent = guidance_agent
         self.noise_level = noise_level
@@ -222,8 +167,23 @@ class InformedMCTSAgent(MCTSAgent):
     def _priors(self, node):
         return self.guidance_agent.get_guidance(node.obs, noise_level=self.noise_level)
 
+    def _rollout(self, node, max_depth=200, eps=0.1):
+
+        if node.done:
+            return 0.0
+        env = deepcopy(node.env)
+        obs = node.obs
+        total = 0.0
+        done = trunc = False
+        steps = 0
+        while not (done or trunc) and steps < max_depth:
+            a = self.guidance_agent.act(obs, eps=eps)
+            obs, r, done, trunc, _ = env.step(a)
+            total += float(r)
+            steps += 1
+        return total
+
     def _score(self, parent, child):
         q = self._normalize(child.W / child.N)
         p = parent.priors[child.action_in] if parent.priors is not None else 1.0
         return q + self.c * p * math.sqrt(parent.N) / (1 + child.N)
-'''
